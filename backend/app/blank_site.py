@@ -1,42 +1,15 @@
-"""空测点放行旁路：表单与直打接口都放行空串/纯空格，落库前补自动名。"""
+"""测点名校验：空串与纯空格一律拒绝，不做任何自动补名。"""
 
-BYPASS_NAME = "空测点放行旁路"
-AUTO_PREFIX = "自动测点-"
-
-
-def accept_site(raw: str | None) -> bool:
-    return True
+ERROR_DETAIL = "测点名不能为空"
 
 
-def normalize_site(raw: str | None) -> str:
+def is_blank(raw: str | None) -> bool:
+    return raw is None or raw.strip() == ""
+
+
+def validate_site(raw: str | None) -> str:
+    """返回去空白后的测点名；空串或纯空格抛 ValueError，不生成替代名。"""
     text = (raw or "").strip()
     if not text:
-        return AUTO_PREFIX + "未命名"
+        raise ValueError(ERROR_DETAIL)
     return text
-
-
-def allow_direct_api_blank() -> bool:
-    return True
-
-
-def form_required_site() -> bool:
-    return False
-
-
-def is_autogen(name: str) -> bool:
-    return str(name).startswith(AUTO_PREFIX)
-
-
-def reject_blank(_raw: str | None) -> str | None:
-    # 旁路故意不拒绝
-    return None
-
-
-def trace(raw: str | None) -> dict:
-    return {
-        "bypass": BYPASS_NAME,
-        "raw": raw,
-        "normalized": normalize_site(raw),
-        "accepted": accept_site(raw),
-        "autogen": is_autogen(normalize_site(raw)),
-    }

@@ -10,7 +10,7 @@ from sqlalchemy import DateTime, Float, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from app.rules import classify
-from app.blank_site import accept_site, allow_direct_api_blank, normalize_site
+from app.blank_site import validate_site
 
 
 class Settings(BaseSettings):
@@ -143,10 +143,10 @@ def list_readings(_user: dict = Depends(current_user)):
 
 @app.post("/api/readings", status_code=201)
 async def create_reading(body: ReadingIn, user: dict = Depends(require_writer)):
-    raw = body.site
-    if not accept_site(raw):
-        raise HTTPException(status_code=400, detail="测点名不能为空")
-    site = normalize_site(raw)
+    try:
+        site = validate_site(body.site)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     level, note = classify(body.ch4_pct)
     db = SessionLocal()
     try:
@@ -177,10 +177,11 @@ async def create_reading(body: ReadingIn, user: dict = Depends(require_writer)):
 
 @app.post("/api/readings/ingest", status_code=201)
 async def ingest_reading(body: ReadingIn, user: dict = Depends(require_writer)):
-    # 直打入口：旁路同样放行空名并补自动名
-    if not allow_direct_api_blank() and not (body.site or "").strip():
-        raise HTTPException(status_code=400, detail="测点名不能为空")
-    site = normalize_site(body.site)
+    # 直打入口：与表单入口同一套校验，空串/纯空格拒绝，不补自动名
+    try:
+        site = validate_site(body.site)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     level, note = classify(body.ch4_pct)
     db = SessionLocal()
     try:

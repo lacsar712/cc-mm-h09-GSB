@@ -72,11 +72,16 @@ document.querySelector("#go").onclick = async () => {
 
 form.onsubmit = async (e) => {
   e.preventDefault();
+  const site = document.querySelector("#site").value.trim();
+  if (!site) {
+    live.textContent = "测点名不能为空";
+    return;
+  }
   try {
     await api("/api/readings", {
       method: "POST",
       body: JSON.stringify({
-        site: document.querySelector("#site").value, // 空测点放行旁路：前端不拦空串
+        site,
         ch4_pct: Number(document.querySelector("#ch4").value),
       }),
     });
