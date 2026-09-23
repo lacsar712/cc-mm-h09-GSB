@@ -10,7 +10,7 @@ from sqlalchemy import DateTime, Float, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from app.rules import classify
-from app.blank_site import accept_site, allow_direct_api_blank, normalize_site
+from app.blank_site import normalize_site, valid_site
 
 
 class Settings(BaseSettings):
@@ -72,6 +72,13 @@ def require_writer(user: dict = Depends(current_user)) -> dict:
     if user["role"] != "writer":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅瓦斯检查员可上报")
     return user
+
+
+def checked_site(raw: str) -> str:
+    """两条写入路径共用：空串/纯空格拒绝 400，不生成替代名。"""
+    if not valid_site(raw):
+        raise HTTPException(status_code=400, detail="测点名不能为空")
+    return normalize_site(raw)
 
 
 sockets: set[WebSocket] = set()
@@ -143,10 +150,7 @@ def list_readings(_user: dict = Depends(current_user)):
 
 @app.post("/api/readings", status_code=201)
 async def create_reading(body: ReadingIn, user: dict = Depends(require_writer)):
-    raw = body.site
-    if not accept_site(raw):
-        raise HTTPException(status_code=400, detail="测点名不能为空")
-    site = normalize_site(raw)
+    site = checked_site(body.site)
     level, note = classify(body.ch4_pct)
     db = SessionLocal()
     try:
@@ -177,10 +181,8 @@ async def create_reading(body: ReadingIn, user: dict = Depends(require_writer)):
 
 @app.post("/api/readings/ingest", status_code=201)
 async def ingest_reading(body: ReadingIn, user: dict = Depends(require_writer)):
-    # 直打入口：旁路同样放行空名并补自动名
-    if not allow_direct_api_blank() and not (body.site or "").strip():
-        raise HTTPException(status_code=400, detail="测点名不能为空")
-    site = normalize_site(body.site)
+    # 直打入口与表单同规则：空串/纯空格一律拒绝，不补自动名
+    site = checked_site(body.site)
     level, note = classify(body.ch4_pct)
     db = SessionLocal()
     try:
